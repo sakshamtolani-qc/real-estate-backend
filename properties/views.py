@@ -10,6 +10,13 @@ class DashboardStatsAPIView(APIView):
 	permission_classes = [IsAuthenticated]
 	def get(self, request):
 		from accounts.models import Employee
+		from django.db import connection
+		
+		# Check if Lead and Deal tables exist
+		tables = connection.introspection.table_names()
+		has_lead_table = 'leads_lead' in tables
+		has_deal_table = 'leads_deal' in tables
+		
 		# Get current month and last month dates
 		now = datetime.now()
 		start_of_month = datetime(now.year, now.month, 1)
@@ -18,17 +25,25 @@ class DashboardStatsAPIView(APIView):
 		else:
 			start_of_last_month = datetime(now.year, now.month - 1, 1)
 		
-		# Calculate Total Revenue (completed deals this month)
-		revenue_this_month = Deal.objects.filter(
-			closing_date__gte=start_of_month,
-			status='completed'
-		).aggregate(total=Sum('amount'))['total'] or decimal.Decimal(0)
-		
-		revenue_last_month = Deal.objects.filter(
-			closing_date__gte=start_of_last_month,
-			closing_date__lt=start_of_month,
-			status='completed'
-		).aggregate(total=Sum('amount'))['total'] or decimal.Decimal(0)
+		# Calculate Total Revenue (completed deals this month) - only if table exists
+		if has_deal_table:
+			try:
+				revenue_this_month = Deal.objects.filter(
+					closing_date__gte=start_of_month,
+					status='completed'
+				).aggregate(total=Sum('amount'))['total'] or decimal.Decimal(0)
+				
+				revenue_last_month = Deal.objects.filter(
+					closing_date__gte=start_of_last_month,
+					closing_date__lt=start_of_month,
+					status='completed'
+				).aggregate(total=Sum('amount'))['total'] or decimal.Decimal(0)
+			except Exception as e:
+				revenue_this_month = decimal.Decimal(0)
+				revenue_last_month = decimal.Decimal(0)
+		else:
+			revenue_this_month = decimal.Decimal(0)
+			revenue_last_month = decimal.Decimal(0)
 		
 		# Calculate trend
 		if revenue_last_month > 0:
@@ -45,28 +60,44 @@ class DashboardStatsAPIView(APIView):
 		else:
 			revenue_display = str(int(revenue_this_month))
 		
-		# New Leads this month
-		new_leads_count = Lead.objects.filter(
-			created_at__gte=start_of_month
-		).count()
+		# New Leads this month - only if table exists
+		if has_lead_table:
+			try:
+				new_leads_count = Lead.objects.filter(
+					created_at__gte=start_of_month
+				).count()
+				
+				# Offers Made (leads in proposal or negotiation stage)
+				offers_count = Lead.objects.filter(
+					Q(status='proposal') | Q(status='negotiation'),
+					updated_at__gte=start_of_month
+				).count()
+			except Exception as e:
+				new_leads_count = 0
+				offers_count = 0
+		else:
+			new_leads_count = 0
+			offers_count = 0
 		
-		# Offers Made (leads in proposal or negotiation stage)
-		offers_count = Lead.objects.filter(
-			Q(status='proposal') | Q(status='negotiation'),
-			updated_at__gte=start_of_month
-		).count()
-		
-		# Deals Closed this month
-		deals_closed_this_month = Deal.objects.filter(
-			closing_date__gte=start_of_month,
-			status='completed'
-		).count()
-		
-		deals_closed_last_month = Deal.objects.filter(
-			closing_date__gte=start_of_last_month,
-			closing_date__lt=start_of_month,
-			status='completed'
-		).count()
+		# Deals Closed this month - only if table exists
+		if has_deal_table:
+			try:
+				deals_closed_this_month = Deal.objects.filter(
+					closing_date__gte=start_of_month,
+					status='completed'
+				).count()
+				
+				deals_closed_last_month = Deal.objects.filter(
+					closing_date__gte=start_of_last_month,
+					closing_date__lt=start_of_month,
+					status='completed'
+				).count()
+			except Exception as e:
+				deals_closed_this_month = 0
+				deals_closed_last_month = 0
+		else:
+			deals_closed_this_month = 0
+			deals_closed_last_month = 0
 		
 		# Calculate deals trend
 		if deals_closed_last_month > 0:
@@ -76,15 +107,21 @@ class DashboardStatsAPIView(APIView):
 			deals_trend_str = "+100%" if deals_closed_this_month > 0 else "0%"
 		
 		# --- Top Closers by number of assigned leads ---
-		top_closers_qs = Employee.objects.annotate(
-			lead_count=Count('leads')
-		).order_by('-lead_count')[:5]
-		top_closers = [
-			{
-				"name": emp.user.get_full_name() or emp.user.username,
-				"lead_count": emp.lead_count
-			} for emp in top_closers_qs if emp.lead_count > 0
-		]
+		if has_lead_table:
+			try:
+				top_closers_qs = Employee.objects.annotate(
+					lead_count=Count('leads')
+				).order_by('-lead_count')[:5]
+				top_closers = [
+					{
+						"name": emp.user.get_full_name() or emp.user.username,
+						"lead_count": emp.lead_count
+					} for emp in top_closers_qs if emp.lead_count > 0
+				]
+			except Exception as e:
+				top_closers = []
+		else:
+			top_closers = []
 		# ---
 		stats = [
 			{
