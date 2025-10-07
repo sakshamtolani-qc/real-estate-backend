@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Sum, Count, Q
 from datetime import datetime, timedelta
 from leads.models import Lead, Deal
@@ -157,9 +157,11 @@ from .models import Property
 from .serializers import PropertyListSerializer, PropertyDetailSerializer
 
 class PropertyListAPIView(generics.ListAPIView):
+	permission_classes = [AllowAny]  # Allow anyone to view properties
 	queryset = Property.objects.all()
 	serializer_class = PropertyListSerializer
 
 class PropertyDetailAPIView(generics.RetrieveAPIView):
+	permission_classes = [AllowAny]  # Allow anyone to view property details
 	queryset = Property.objects.all()
 	serializer_class = PropertyDetailSerializer

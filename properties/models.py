@@ -88,7 +88,7 @@ class Property(models.Model):
         any_image = self.images.first()
         if any_image:
             return any_image.image.url
-        return '/static/placeholder.jpg'
+        return None  # Return None so frontend can use its own fallback images
     
     @property
     def type(self):
