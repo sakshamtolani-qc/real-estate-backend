@@ -17,6 +17,21 @@ class LeadSource(models.Model):
         return self.name
 
 
+class LeadNote(models.Model):
+    """Individual notes for leads"""
+    lead = models.ForeignKey('Lead', on_delete=models.CASCADE, related_name='lead_notes')
+    note = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey('accounts.User', on_delete=models.SET_NULL, null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        app_label = "leads"
+    
+    def __str__(self):
+        return f"Note for {self.lead.full_name} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+
+
 class Lead(models.Model):
     """Customer leads"""
     STATUS_CHOICES = [
@@ -47,6 +62,9 @@ class Lead(models.Model):
     
     # Notes
     notes = models.TextField(blank=True)
+    
+    # Follow-up
+    follow_up_date = models.DateField(null=True, blank=True)
     
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)

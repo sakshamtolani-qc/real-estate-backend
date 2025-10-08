@@ -1,9 +1,14 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+from .models import Lead, LeadSource, LeadNote
+from accounts.models import Employee
 
 class LeadSourcesAPIView(APIView):
     permission_classes = [IsAuthenticated]
+    
     def get(self, request):
         # Dummy data, replace with real aggregation logic
         lead_sources = [
@@ -14,3 +19,219 @@ class LeadSourcesAPIView(APIView):
             {"source": "Other", "percentage": 37, "color": "#7DD3E8"}
         ]
         return Response({"lead_sources": lead_sources})
+
+
+class LeadsListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        leads = Lead.objects.select_related('assigned_to__user', 'source').all()
+        
+        leads_data = []
+        for lead in leads:
+            lead_dict = {
+                'id': lead.id,
+                'first_name': lead.first_name,
+                'last_name': lead.last_name,
+                'email': lead.email,
+                'phone': lead.phone,
+                'budget_min': str(lead.budget_min) if lead.budget_min else None,
+                'budget_max': str(lead.budget_max) if lead.budget_max else None,
+                'status': lead.status,
+                'source': lead.source.name if lead.source else None,
+                'assigned_to': {
+                    'id': lead.assigned_to.id if lead.assigned_to else None,
+                    'user': {
+                        'first_name': lead.assigned_to.user.first_name if lead.assigned_to else '',
+                        'last_name': lead.assigned_to.user.last_name if lead.assigned_to else '',
+                        'username': lead.assigned_to.user.username if lead.assigned_to else '',
+                    }
+                } if lead.assigned_to else None,
+                'created_at': lead.created_at,
+                'updated_at': lead.updated_at,
+            }
+            leads_data.append(lead_dict)
+        
+        return Response({
+            'results': leads_data,
+            'count': len(leads_data)
+        })
+
+
+class LeadCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        data = request.data
+        
+        try:
+            # Get or create default lead source
+            source, _ = LeadSource.objects.get_or_create(
+                name='Website',
+                defaults={'description': 'Direct website inquiry'}
+            )
+            
+            # Get assigned agent if provided
+            assigned_to = None
+            if data.get('assigned_to'):
+                try:
+                    assigned_to = Employee.objects.get(id=data['assigned_to'])
+                except Employee.DoesNotExist:
+                    pass
+            
+            # Create the lead
+            lead = Lead.objects.create(
+                first_name=data.get('first_name'),
+                last_name=data.get('last_name'),
+                email=data.get('email'),
+                phone=data.get('phone'),
+                budget_min=data.get('budget_min'),
+                budget_max=data.get('budget_max'),
+                status=data.get('status', 'new'),
+                source=source,
+                assigned_to=assigned_to,
+            )
+            
+            return Response({
+                'message': 'Lead created successfully',
+                'lead_id': lead.id
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({
+                'message': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LeadDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, lead_id):
+        try:
+            lead = get_object_or_404(Lead.objects.select_related('assigned_to__user', 'source'), id=lead_id)
+            
+            # Get all notes for this lead
+            notes = lead.lead_notes.all()
+            notes_data = []
+            for note in notes:
+                notes_data.append({
+                    'id': note.id,
+                    'note': note.note,
+                    'created_at': note.created_at.isoformat(),
+                    'created_by': note.created_by.username if note.created_by else 'Unknown',
+                })
+            
+            lead_data = {
+                'id': lead.id,
+                'first_name': lead.first_name,
+                'last_name': lead.last_name,
+                'email': lead.email,
+                'phone': lead.phone,
+                'budget_min': str(lead.budget_min) if lead.budget_min else None,
+                'budget_max': str(lead.budget_max) if lead.budget_max else None,
+                'status': lead.status,
+                'source': lead.source.name if lead.source else None,
+                'notes': lead.notes,
+                'notes_history': notes_data,
+                'follow_up_date': lead.follow_up_date.isoformat() if lead.follow_up_date else None,
+                'assigned_to': {
+                    'id': lead.assigned_to.id if lead.assigned_to else None,
+                    'user': {
+                        'first_name': lead.assigned_to.user.first_name if lead.assigned_to else '',
+                        'last_name': lead.assigned_to.user.last_name if lead.assigned_to else '',
+                        'username': lead.assigned_to.user.username if lead.assigned_to else '',
+                    }
+                } if lead.assigned_to else None,
+                'created_at': lead.created_at,
+                'updated_at': lead.updated_at,
+            }
+            
+            return Response(lead_data)
+        except Exception as e:
+            return Response({
+                'message': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LeadUpdateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def patch(self, request, lead_id):
+        try:
+            lead = get_object_or_404(Lead, id=lead_id)
+            data = request.data
+            
+            # Update basic fields
+            if 'first_name' in data:
+                lead.first_name = data['first_name']
+            if 'last_name' in data:
+                lead.last_name = data['last_name']
+            if 'email' in data:
+                lead.email = data['email']
+            if 'phone' in data:
+                lead.phone = data['phone']
+            if 'status' in data:
+                lead.status = data['status']
+            if 'notes' in data and data['notes'].strip():
+                # Create a new note entry
+                LeadNote.objects.create(
+                    lead=lead,
+                    note=data['notes'],
+                    created_by=request.user if request.user.is_authenticated else None
+                )
+                # Also update the main notes field
+                lead.notes = data['notes']
+            if 'follow_up_date' in data:
+                lead.follow_up_date = data['follow_up_date'] if data['follow_up_date'] else None
+            
+            # Update assigned agent
+            if 'assigned_to' in data:
+                if data['assigned_to']:
+                    try:
+                        agent = Employee.objects.get(id=data['assigned_to'])
+                        lead.assigned_to = agent
+                    except Employee.DoesNotExist:
+                        return Response({
+                            'message': 'Invalid agent ID'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    lead.assigned_to = None
+            
+            lead.save()
+            
+            return Response({
+                'message': 'Lead updated successfully',
+                'lead_id': lead.id
+            })
+        except Exception as e:
+            return Response({
+                'message': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AgentsListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            agents = Employee.objects.select_related('user').all()
+            
+            agents_data = []
+            for agent in agents:
+                agent_dict = {
+                    'id': agent.id,
+                    'first_name': agent.user.first_name,
+                    'last_name': agent.user.last_name,
+                    'username': agent.user.username,
+                    'full_name': f"{agent.user.first_name} {agent.user.last_name}".strip() or agent.user.username,
+                }
+                agents_data.append(agent_dict)
+            
+            return Response({
+                'results': agents_data,
+                'count': len(agents_data)
+            })
+        except Exception as e:
+            return Response({
+                'message': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
