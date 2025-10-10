@@ -4,9 +4,32 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from datetime import datetime, timedelta
+from django.utils import timezone
 from .models import ScheduledVisit, Lead
 from properties.models import Property
 from accounts.models import Employee
+
+
+def auto_complete_past_visits():
+    """Automatically mark past visits as completed"""
+    now = datetime.now()
+    today = now.date()
+    current_time = now.time()
+    
+    # Get all scheduled visits that have ended
+    past_visits = ScheduledVisit.objects.filter(
+        status='scheduled'
+    ).filter(
+        visit_date__lt=today
+    ) | ScheduledVisit.objects.filter(
+        status='scheduled',
+        visit_date=today,
+        end_time__lt=current_time
+    )
+    
+    # Update their status to completed
+    count = past_visits.update(status='completed')
+    return count
 
 
 class ScheduledVisitListAPIView(APIView):
@@ -16,10 +39,16 @@ class ScheduledVisitListAPIView(APIView):
         """Get all scheduled visits for the current agent"""
         user = request.user
         
-        # Get upcoming visits (next 30 days)
-        today = datetime.now().date()
+        # Automatically mark past visits as completed
+        auto_complete_past_visits()
+        
+        # Get current date and time
+        now = datetime.now()
+        today = now.date()
+        current_time = now.time()
         end_date = today + timedelta(days=30)
         
+        # Get visits from today onwards
         visits = ScheduledVisit.objects.filter(
             agent=user,
             visit_date__gte=today,
@@ -29,6 +58,9 @@ class ScheduledVisitListAPIView(APIView):
         
         visits_data = []
         for visit in visits:
+            # Skip visits that have already ended today
+            if visit.visit_date == today and visit.end_time < current_time:
+                continue
             visit_data = {
                 'id': visit.id,
                 'title': visit.title,

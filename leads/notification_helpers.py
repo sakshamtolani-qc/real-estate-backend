@@ -119,13 +119,16 @@ def lead_notification(sender, instance, created, **kwargs):
 
 
 # Signal: When a new property is added
-@receiver(post_save, sender=Property)
+# TODO: Add created_by field to Property model to enable this notification
+# @receiver(post_save, sender=Property)
 def property_added_notification(sender, instance, created, **kwargs):
     """
     Send notification to all agents/admins when a new property is added
     """
     if created:
         # Get the creator
+        # DISABLED: Property model doesn't have created_by field yet
+        return
         creator_role = instance.created_by.role if instance.created_by else None
         
         if creator_role == 'admin':

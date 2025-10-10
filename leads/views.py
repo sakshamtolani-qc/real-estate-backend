@@ -87,6 +87,25 @@ class LeadCreateAPIView(APIView):
         data = request.data
         
         try:
+            # Validate required fields
+            required_fields = ['first_name', 'last_name', 'email', 'phone']
+            for field in required_fields:
+                if not data.get(field):
+                    return Response({
+                        'success': False,
+                        'message': f'{field.replace("_", " ").title()} is required'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check for duplicate email
+            email = data.get('email')
+            existing_lead = Lead.objects.filter(email=email).first()
+            if existing_lead:
+                return Response({
+                    'success': False,
+                    'message': f'A lead with email {email} already exists. Please check the existing leads list.',
+                    'existing_lead_id': existing_lead.id
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
             # Get or create default lead source
             source, _ = LeadSource.objects.get_or_create(
                 name='Website',
@@ -99,7 +118,10 @@ class LeadCreateAPIView(APIView):
                 try:
                     assigned_to = Employee.objects.get(id=data['assigned_to'])
                 except Employee.DoesNotExist:
-                    pass
+                    return Response({
+                        'success': False,
+                        'message': 'Selected agent not found'
+                    }, status=status.HTTP_400_BAD_REQUEST)
             else:
                 # If no agent assigned and user is not admin, auto-assign to current user
                 if not (request.user.is_superuser or request.user.is_staff):
@@ -112,7 +134,7 @@ class LeadCreateAPIView(APIView):
             lead = Lead.objects.create(
                 first_name=data.get('first_name'),
                 last_name=data.get('last_name'),
-                email=data.get('email'),
+                email=email,
                 phone=data.get('phone'),
                 budget_min=data.get('budget_min'),
                 budget_max=data.get('budget_max'),
@@ -123,13 +145,22 @@ class LeadCreateAPIView(APIView):
             )
             
             return Response({
-                'message': 'Lead created successfully',
-                'lead_id': lead.id
+                'success': True,
+                'message': 'Lead created successfully!',
+                'lead_id': lead.id,
+                'lead': {
+                    'id': lead.id,
+                    'first_name': lead.first_name,
+                    'last_name': lead.last_name,
+                    'email': lead.email,
+                    'phone': lead.phone
+                }
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
             return Response({
-                'message': str(e)
+                'success': False,
+                'message': f'Error creating lead: {str(e)}'
             }, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -272,6 +303,35 @@ class LeadUpdateAPIView(APIView):
                 'message': 'Lead updated successfully',
                 'lead_id': lead.id
             })
+        except Exception as e:
+            return Response({
+                'message': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LeadDeleteAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, lead_id):
+        try:
+            user = request.user
+            lead = get_object_or_404(Lead, id=lead_id)
+            
+            # Check permissions - only admins can delete leads
+            # Or allow agents to delete their own created leads (optional)
+            if not (user.is_superuser or user.is_staff):
+                # Optional: Allow agents to delete leads they created
+                if lead.created_by != user:
+                    return Response({
+                        'message': 'You do not have permission to delete this lead'
+                    }, status=status.HTTP_403_FORBIDDEN)
+            
+            lead_name = f"{lead.first_name} {lead.last_name}"
+            lead.delete()
+            
+            return Response({
+                'message': f'Lead "{lead_name}" deleted successfully'
+            }, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({
                 'message': str(e)

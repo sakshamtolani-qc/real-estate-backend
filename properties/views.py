@@ -152,9 +152,10 @@ class DashboardStatsAPIView(APIView):
 			}
 		]
 		return Response({"stats": stats, "top_closers": top_closers})
-from rest_framework import generics
-from .models import Property
-from .serializers import PropertyListSerializer, PropertyDetailSerializer
+from rest_framework import generics, status as drf_status
+from rest_framework.parsers import MultiPartParser, FormParser
+from .models import Property, PropertyType, PropertyImage
+from .serializers import PropertyListSerializer, PropertyDetailSerializer, PropertyCreateUpdateSerializer
 
 class PropertyListAPIView(generics.ListAPIView):
 	permission_classes = [AllowAny]  # Allow anyone to view properties
@@ -165,3 +166,151 @@ class PropertyDetailAPIView(generics.RetrieveAPIView):
 	permission_classes = [AllowAny]  # Allow anyone to view property details
 	queryset = Property.objects.all()
 	serializer_class = PropertyDetailSerializer
+
+class PropertyCreateAPIView(APIView):
+	"""Allow authenticated users (agents/admin) to create property listings"""
+	permission_classes = [IsAuthenticated]
+	parser_classes = [MultiPartParser, FormParser]
+	
+	def post(self, request):
+		try:
+			# For FormData, use request.data (DRF handles it properly)
+			data = request.data
+			
+			# Validate required fields
+			required_fields = ['title', 'property_type_id', 'listing_type', 'location', 'description']
+			for field in required_fields:
+				if not data.get(field):
+					return Response({
+						'success': False,
+						'message': f'{field.replace("_", " ").title()} is required'
+					}, status=drf_status.HTTP_400_BAD_REQUEST)
+			
+			# Get property type
+			try:
+				property_type = PropertyType.objects.get(id=data['property_type_id'])
+			except PropertyType.DoesNotExist:
+				return Response({
+					'success': False,
+					'message': 'Invalid property type'
+				}, status=drf_status.HTTP_400_BAD_REQUEST)
+			
+			# Set pricing based on listing type
+			sale_price = None
+			rent_price = None
+			price_display = data.get('price', '')
+			
+			if data['listing_type'] == 'sale':
+				sale_price = data.get('sale_price', '')
+				if not sale_price or sale_price == '':
+					return Response({
+						'success': False,
+						'message': 'Sale price is required for sale listings'
+					}, status=drf_status.HTTP_400_BAD_REQUEST)
+				if not price_display:
+					price_display = f"₹{int(float(sale_price)):,}"
+			elif data['listing_type'] == 'rent':
+				rent_price = data.get('rent_price', '')
+				if not rent_price or rent_price == '':
+					return Response({
+						'success': False,
+						'message': 'Rent price is required for rent listings'
+					}, status=drf_status.HTTP_400_BAD_REQUEST)
+				if not price_display:
+					price_display = f"₹{int(float(rent_price)):,}/month"
+			
+			# Calculate display area
+			square_feet_value = data.get('square_feet', '0')
+			square_feet = int(square_feet_value) if square_feet_value and str(square_feet_value).strip() else 0
+			area_display = data.get('area', '')
+			if not area_display:
+				if square_feet > 0:
+					area_display = f"{square_feet} sqft"
+				else:
+					area_display = "0 sqft"
+			
+			# Create property with safe type conversions
+			bedrooms_val = data.get('bedrooms', '0')
+			bathrooms_val = data.get('bathrooms', '0')
+			parking_val = data.get('parking_spaces', '0')
+			
+			property_obj = Property.objects.create(
+				title=str(data['title']),
+				property_type=property_type,
+				listing_type=str(data['listing_type']),
+				status=str(data.get('status', 'available')),
+				address=str(data.get('address', data['location'])),
+				city=str(data.get('city', '')),
+				state=str(data.get('state', '')),
+				zip_code=str(data.get('zip_code', '')),
+				location=str(data['location']),
+				bedrooms=int(bedrooms_val) if str(bedrooms_val).strip() and str(bedrooms_val) != '' else 0,
+				bathrooms=int(bathrooms_val) if str(bathrooms_val).strip() and str(bathrooms_val) != '' else 0,
+				square_feet=square_feet,
+				area=str(area_display),
+				parking_spaces=int(parking_val) if str(parking_val).strip() and str(parking_val) != '' else 0,
+				furnished_status=str(data.get('furnished_status', '')),
+				sale_price=sale_price if sale_price and sale_price != '' else None,
+				rent_price=rent_price if rent_price and rent_price != '' else None,
+				price=str(price_display),
+				has_pool=str(data.get('has_pool', 'false')).lower() == 'true',
+				has_garden=str(data.get('has_garden', 'false')).lower() == 'true',
+				description=str(data['description']),
+				featured=str(data.get('featured', 'false')).lower() == 'true',
+			)
+			
+			# Handle image uploads
+			images = request.FILES.getlist('images')
+			if images:
+				for index, image in enumerate(images):
+					PropertyImage.objects.create(
+						property=property_obj,
+						image=image,
+						title=f"{property_obj.title} - Image {index + 1}",
+						is_primary=(index == 0),  # First image is primary
+						order=index
+					)
+			
+			return Response({
+				'success': True,
+				'message': 'Property created successfully!',
+				'property_id': property_obj.id,
+				'property': {
+					'id': property_obj.id,
+					'uuid': str(property_obj.uuid),
+					'title': property_obj.title,
+					'location': property_obj.location,
+					'price': property_obj.price
+				}
+			}, status=drf_status.HTTP_201_CREATED)
+			
+		except Exception as e:
+			import traceback
+			print(f"Error creating property: {str(e)}")
+			print(traceback.format_exc())
+			return Response({
+				'success': False,
+				'message': f'Error creating property: {str(e)}'
+			}, status=drf_status.HTTP_400_BAD_REQUEST)
+
+class PropertyTypesAPIView(APIView):
+	"""Get list of all property types"""
+	permission_classes = [IsAuthenticated]
+	
+	def get(self, request):
+		try:
+			property_types = PropertyType.objects.all()
+			types_data = [{
+				'id': pt.id,
+				'name': pt.name,
+				'description': pt.description
+			} for pt in property_types]
+			
+			return Response({
+				'results': types_data,
+				'count': len(types_data)
+			})
+		except Exception as e:
+			return Response({
+				'message': str(e)
+			}, status=drf_status.HTTP_400_BAD_REQUEST)

@@ -20,6 +20,14 @@ class EmailTokenObtainPairSerializer(serializers.Serializer):
             raise serializers.ValidationError('Invalid credentials.')
         from rest_framework_simplejwt.tokens import RefreshToken
         refresh = RefreshToken.for_user(user)
+        
+        # Determine user role explicitly
+        role = 'customer'  # default
+        if user.is_superuser:
+            role = 'admin'
+        elif user.is_employee:
+            role = 'agent'
+        
         return {
             'refresh': str(refresh),
             'access': str(refresh.access_token),
@@ -33,6 +41,7 @@ class EmailTokenObtainPairSerializer(serializers.Serializer):
                 'is_employee': user.is_employee,
                 'is_client': user.is_client,
                 'is_superuser': user.is_superuser,
+                'role': role,  # Add explicit role field
             }
         }
 
