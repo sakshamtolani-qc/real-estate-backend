@@ -14,6 +14,18 @@ from .scheduled_visit_views import (
     ScheduledVisitDeleteAPIView,
     ScheduledVisitUpdateAPIView
 )
+from .notification_views import (
+    NotificationListAPIView,
+    NotificationMarkReadAPIView,
+    NotificationMarkAllReadAPIView,
+    NotificationDeleteAPIView,
+    NotificationCreateAPIView
+)
+from .contact_views import (
+    ContactInquiryAPIView,
+    CallScheduleAPIView,
+    PropertyInquiryAPIView
+)
 
 urlpatterns = [
     path('lead-sources/', LeadSourcesAPIView.as_view(), name='lead-sources'),
@@ -28,4 +40,14 @@ urlpatterns = [
     path('visits/create/', ScheduledVisitCreateAPIView.as_view(), name='visit-create'),
     path('visits/<int:visit_id>/delete/', ScheduledVisitDeleteAPIView.as_view(), name='visit-delete'),
     path('visits/<int:visit_id>/update/', ScheduledVisitUpdateAPIView.as_view(), name='visit-update'),
+    # Notifications
+    path('notifications/', NotificationListAPIView.as_view(), name='notifications-list'),
+    path('notifications/mark-read/', NotificationMarkReadAPIView.as_view(), name='notifications-mark-read'),
+    path('notifications/mark-all-read/', NotificationMarkAllReadAPIView.as_view(), name='notifications-mark-all-read'),
+    path('notifications/<int:notification_id>/delete/', NotificationDeleteAPIView.as_view(), name='notification-delete'),
+    path('notifications/create/', NotificationCreateAPIView.as_view(), name='notification-create'),
+    # Contact/Inquiry endpoints (public)
+    path('contact/', ContactInquiryAPIView.as_view(), name='contact-inquiry'),
+    path('schedule-call/', CallScheduleAPIView.as_view(), name='schedule-call'),
+    path('property-inquiry/', PropertyInquiryAPIView.as_view(), name='property-inquiry'),
 ]
