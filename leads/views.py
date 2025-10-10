@@ -25,7 +25,23 @@ class LeadsListAPIView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
-        leads = Lead.objects.select_related('assigned_to__user', 'source').all()
+        user = request.user
+        
+        # Check if user is admin/superuser - they can see all leads
+        if user.is_superuser or user.is_staff:
+            leads = Lead.objects.select_related('assigned_to__user', 'source').all()
+        else:
+            # For agents/employees - filter to show only leads assigned to them or created by them
+            try:
+                employee = Employee.objects.get(user=user)
+                # Get leads assigned to this employee OR created by this user
+                from django.db.models import Q
+                leads = Lead.objects.select_related('assigned_to__user', 'source').filter(
+                    Q(assigned_to=employee) | Q(created_by=user)
+                ).distinct()
+            except Employee.DoesNotExist:
+                # User is not an employee, return empty list
+                leads = Lead.objects.none()
         
         leads_data = []
         for lead in leads:
@@ -47,6 +63,12 @@ class LeadsListAPIView(APIView):
                         'username': lead.assigned_to.user.username if lead.assigned_to else '',
                     }
                 } if lead.assigned_to else None,
+                'created_by': {
+                    'id': lead.created_by.id if lead.created_by else None,
+                    'first_name': lead.created_by.first_name if lead.created_by else '',
+                    'last_name': lead.created_by.last_name if lead.created_by else '',
+                    'username': lead.created_by.username if lead.created_by else '',
+                } if lead.created_by else None,
                 'created_at': lead.created_at,
                 'updated_at': lead.updated_at,
             }
@@ -71,13 +93,20 @@ class LeadCreateAPIView(APIView):
                 defaults={'description': 'Direct website inquiry'}
             )
             
-            # Get assigned agent if provided
+            # Get assigned agent if provided, otherwise auto-assign to current user if they're an agent
             assigned_to = None
             if data.get('assigned_to'):
                 try:
                     assigned_to = Employee.objects.get(id=data['assigned_to'])
                 except Employee.DoesNotExist:
                     pass
+            else:
+                # If no agent assigned and user is not admin, auto-assign to current user
+                if not (request.user.is_superuser or request.user.is_staff):
+                    try:
+                        assigned_to = Employee.objects.get(user=request.user)
+                    except Employee.DoesNotExist:
+                        pass
             
             # Create the lead
             lead = Lead.objects.create(
@@ -90,6 +119,7 @@ class LeadCreateAPIView(APIView):
                 status=data.get('status', 'new'),
                 source=source,
                 assigned_to=assigned_to,
+                created_by=request.user,  # Track who created this lead
             )
             
             return Response({
@@ -108,7 +138,24 @@ class LeadDetailAPIView(APIView):
     
     def get(self, request, lead_id):
         try:
+            user = request.user
+            
+            # Get the lead
             lead = get_object_or_404(Lead.objects.select_related('assigned_to__user', 'source'), id=lead_id)
+            
+            # Check permissions - admins can see all, agents can only see their assigned/created leads
+            if not (user.is_superuser or user.is_staff):
+                try:
+                    employee = Employee.objects.get(user=user)
+                    # Check if lead is assigned to this employee or created by this user
+                    if lead.assigned_to != employee and lead.created_by != user:
+                        return Response({
+                            'message': 'You do not have permission to view this lead'
+                        }, status=status.HTTP_403_FORBIDDEN)
+                except Employee.DoesNotExist:
+                    return Response({
+                        'message': 'You do not have permission to view this lead'
+                    }, status=status.HTTP_403_FORBIDDEN)
             
             # Get all notes for this lead
             notes = lead.lead_notes.all()
@@ -142,6 +189,12 @@ class LeadDetailAPIView(APIView):
                         'username': lead.assigned_to.user.username if lead.assigned_to else '',
                     }
                 } if lead.assigned_to else None,
+                'created_by': {
+                    'id': lead.created_by.id if lead.created_by else None,
+                    'first_name': lead.created_by.first_name if lead.created_by else '',
+                    'last_name': lead.created_by.last_name if lead.created_by else '',
+                    'username': lead.created_by.username if lead.created_by else '',
+                } if lead.created_by else None,
                 'created_at': lead.created_at,
                 'updated_at': lead.updated_at,
             }
@@ -158,7 +211,23 @@ class LeadUpdateAPIView(APIView):
     
     def patch(self, request, lead_id):
         try:
+            user = request.user
             lead = get_object_or_404(Lead, id=lead_id)
+            
+            # Check permissions - admins can update all, agents can only update their assigned/created leads
+            if not (user.is_superuser or user.is_staff):
+                try:
+                    employee = Employee.objects.get(user=user)
+                    # Check if lead is assigned to this employee or created by this user
+                    if lead.assigned_to != employee and lead.created_by != user:
+                        return Response({
+                            'message': 'You do not have permission to update this lead'
+                        }, status=status.HTTP_403_FORBIDDEN)
+                except Employee.DoesNotExist:
+                    return Response({
+                        'message': 'You do not have permission to update this lead'
+                    }, status=status.HTTP_403_FORBIDDEN)
+            
             data = request.data
             
             # Update basic fields
