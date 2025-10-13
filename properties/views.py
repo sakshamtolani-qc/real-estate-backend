@@ -159,12 +159,19 @@ from .serializers import PropertyListSerializer, PropertyDetailSerializer, Prope
 
 class PropertyListAPIView(generics.ListAPIView):
 	permission_classes = [AllowAny]  # Allow anyone to view properties
-	queryset = Property.objects.all()
+	queryset = Property.objects.select_related('property_type').prefetch_related('images').all()
 	serializer_class = PropertyListSerializer
+	pagination_class = None  # Disable pagination for now, or configure if needed
+	
+	def get_serializer_context(self):
+		"""Pass request context to serializer"""
+		context = super().get_serializer_context()
+		context['request'] = self.request
+		return context
 
 class PropertyDetailAPIView(generics.RetrieveAPIView):
 	permission_classes = [AllowAny]  # Allow anyone to view property details
-	queryset = Property.objects.all()
+	queryset = Property.objects.select_related('property_type').prefetch_related('images').all()
 	serializer_class = PropertyDetailSerializer
 
 class PropertyCreateAPIView(APIView):

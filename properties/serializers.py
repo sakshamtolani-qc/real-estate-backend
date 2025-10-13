@@ -30,10 +30,18 @@ class PropertyListSerializer(serializers.ModelSerializer):
         ]
     
     def get_image(self, obj):
-        request = self.context.get('request')
-        if obj.image and request:
-            return request.build_absolute_uri(obj.image)
-        return '/P1.png'  # Default placeholder
+        """Get image URL, handling cases where image property returns None"""
+        try:
+            request = self.context.get('request')
+            image_url = obj.image  # This is a property that might return None
+            if image_url and request:
+                # Only build absolute URI if image_url is not None
+                return request.build_absolute_uri(image_url)
+        except Exception as e:
+            # Log error but don't fail the request
+            print(f"Error getting image for property {obj.id}: {e}")
+        # Return None to let frontend use its default images
+        return None
     
     def get_status(self, obj):
         if obj.listing_type == 'sale':
