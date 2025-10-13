@@ -174,12 +174,12 @@ class LeadDetailAPIView(APIView):
             # Get the lead
             lead = get_object_or_404(Lead.objects.select_related('assigned_to__user', 'source'), id=lead_id)
             
-            # Check permissions - admins can see all, agents can only see their assigned/created leads
+            # Check permissions - admins can see all, agents can only see their assigned/created leads or unassigned leads
             if not (user.is_superuser or user.is_staff):
                 try:
                     employee = Employee.objects.get(user=user)
-                    # Check if lead is assigned to this employee or created by this user
-                    if lead.assigned_to != employee and lead.created_by != user:
+                    # Check if lead is assigned to this employee, created by this user, or is unassigned (available for agents to take)
+                    if lead.assigned_to != employee and lead.created_by != user and lead.assigned_to is not None:
                         return Response({
                             'message': 'You do not have permission to view this lead'
                         }, status=status.HTTP_403_FORBIDDEN)
@@ -245,12 +245,12 @@ class LeadUpdateAPIView(APIView):
             user = request.user
             lead = get_object_or_404(Lead, id=lead_id)
             
-            # Check permissions - admins can update all, agents can only update their assigned/created leads
+            # Check permissions - admins can update all, agents can only update their assigned/created leads or unassigned leads
             if not (user.is_superuser or user.is_staff):
                 try:
                     employee = Employee.objects.get(user=user)
-                    # Check if lead is assigned to this employee or created by this user
-                    if lead.assigned_to != employee and lead.created_by != user:
+                    # Check if lead is assigned to this employee, created by this user, or is unassigned (available for agents to take)
+                    if lead.assigned_to != employee and lead.created_by != user and lead.assigned_to is not None:
                         return Response({
                             'message': 'You do not have permission to update this lead'
                         }, status=status.HTTP_403_FORBIDDEN)

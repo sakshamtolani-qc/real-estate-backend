@@ -11,21 +11,27 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from .env file
+load_dotenv(BASE_DIR / '.env')
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-(fu5#ls+5$95^d!o8f(9j&f82o&c@x0!%(3n5q7#)bv5z%t1h8"
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-(fu5#ls+5$95^d!o8f(9j&f82o&c@x0!%(3n5q7#)bv5z%t1h8')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
+# Parse ALLOWED_HOSTS from comma-separated string
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
@@ -81,8 +87,8 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "ENGINE": os.getenv('DATABASE_ENGINE', 'django.db.backends.sqlite3'),
+        "NAME": BASE_DIR / os.getenv('DATABASE_NAME', 'db.sqlite3'),
     }
 }
 
@@ -121,7 +127,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = os.getenv('STATIC_URL', 'static/')
 
 # Default primary key field type
 # Default primary key field type
@@ -133,17 +139,17 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
 
 # Media files
-MEDIA_URL = '/media/'
+MEDIA_URL = os.getenv('MEDIA_URL', '/media/')
 MEDIA_ROOT = BASE_DIR / 'media'
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # For development only
-CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'True') == 'True'  # For development only
+CORS_ALLOW_CREDENTIALS = os.getenv('CORS_ALLOW_CREDENTIALS', 'True') == 'True'
 
 # REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10,
+    'PAGE_SIZE': int(os.getenv('REST_FRAMEWORK_PAGE_SIZE', 10)),
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
@@ -156,12 +162,12 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=7),  # Extended for development
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_ACCESS_TOKEN_LIFETIME_DAYS', 7))),  # Extended for development
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_TOKEN_LIFETIME_DAYS', 30))),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': False,
     'UPDATE_LAST_LOGIN': True,
-    'ALGORITHM': 'HS256',
+    'ALGORITHM': os.getenv('JWT_ALGORITHM', 'HS256'),
     'SIGNING_KEY': SECRET_KEY,
     'VERIFYING_KEY': None,
     'AUTH_HEADER_TYPES': ('Bearer',),

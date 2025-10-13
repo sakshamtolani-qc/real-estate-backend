@@ -12,8 +12,9 @@ def notify_admins_and_agents(notification_type, title, message, related_data=Non
     """
     Send notification to all admins and agents
     """
+    from django.db.models import Q
     # Get all admins and agents
-    users = User.objects.filter(role__in=['admin', 'agent'])
+    users = User.objects.filter(Q(is_staff=True) | Q(is_superuser=True) | Q(is_employee=True))
     
     notifications = []
     for user in users:
@@ -74,7 +75,8 @@ def lead_notification(sender, instance, created, **kwargs):
     # Notification for new lead creation
     if created:
         # Notify all admins and agents about new lead
-        users = User.objects.filter(role__in=['admin', 'agent'])
+        from django.db.models import Q
+        users = User.objects.filter(Q(is_staff=True) | Q(is_superuser=True) | Q(is_employee=True))
         
         for user in users:
             Notification.objects.create(
@@ -89,7 +91,7 @@ def lead_notification(sender, instance, created, **kwargs):
                     'lead_phone': instance.phone,
                     'lead_source': instance.source.name if instance.source else 'Unknown'
                 },
-                action_url='/admin/leads' if user.role == 'admin' else '/agent/leads'
+                action_url='/admin/leads' if (user.is_staff or user.is_superuser) else '/agent/leads'
             )
     
     # Notification for lead assignment
@@ -133,7 +135,7 @@ def property_added_notification(sender, instance, created, **kwargs):
         
         if creator_role == 'admin':
             # Notify all agents
-            agents = User.objects.filter(role='agent')
+            agents = User.objects.filter(is_employee=True)
             for agent in agents:
                 Notification.objects.create(
                     recipient=agent,
@@ -151,7 +153,8 @@ def property_added_notification(sender, instance, created, **kwargs):
         
         elif creator_role == 'agent':
             # Notify all admins
-            admins = User.objects.filter(role='admin')
+            from django.db.models import Q
+            admins = User.objects.filter(Q(is_staff=True) | Q(is_superuser=True))
             for admin in admins:
                 Notification.objects.create(
                     recipient=admin,
