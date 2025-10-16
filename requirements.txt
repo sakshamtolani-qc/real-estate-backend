@@ -6,3 +6,5 @@ python-dotenv==1.0.0
 djangorestframework-simplejwt
 psycopg2-binary==2.9.11
 dj-database-url==3.0.1
+cloudinary==1.36.0
+django-cloudinary-storage==0.3.0

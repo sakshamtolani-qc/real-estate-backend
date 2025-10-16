@@ -9,9 +9,25 @@ class PropertyTypeSerializer(serializers.ModelSerializer):
 
 
 class PropertyImageSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
+    
     class Meta:
         model = PropertyImage
         fields = ['id', 'image', 'title', 'is_primary', 'order']
+    
+    def get_image(self, obj):
+        """Return image URL - handles both Cloudinary URLs and local paths"""
+        if obj.image:
+            image_str = str(obj.image)
+            # If it's already a Cloudinary URL, return as is
+            if image_str.startswith('http'):
+                return image_str
+            # If it's a local path, build absolute URI
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(image_str)
+            return image_str
+        return None
 
 
 class PropertyListSerializer(serializers.ModelSerializer):
@@ -30,13 +46,22 @@ class PropertyListSerializer(serializers.ModelSerializer):
         ]
     
     def get_image(self, obj):
-        """Get image URL, handling cases where image property returns None"""
+        """Get image URL, handling Cloudinary URLs and local paths"""
         try:
-            request = self.context.get('request')
             image_url = obj.image  # This is a property that might return None
-            if image_url and request:
-                # Only build absolute URI if image_url is not None
-                return request.build_absolute_uri(image_url)
+            if not image_url:
+                return None
+            
+            image_str = str(image_url)
+            # If it's already a Cloudinary URL, return as is
+            if image_str.startswith('http'):
+                return image_str
+            
+            # For local paths, build absolute URI
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(image_str)
+            return image_str
         except Exception as e:
             # Log error but don't fail the request
             print(f"Error getting image for property {obj.id}: {e}")
@@ -72,8 +97,23 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
     def get_images(self, obj):
         request = self.context.get('request')
         images = obj.images.all()
-        if images and request:
-            return [request.build_absolute_uri(img.image.url) for img in images]
+        image_urls = []
+        
+        if images:
+            for img in images:
+                image_str = str(img.image)
+                # If it's a Cloudinary URL (starts with http), use as is
+                if image_str.startswith('http'):
+                    image_urls.append(image_str)
+                # Otherwise, build absolute URI for local files
+                elif request:
+                    image_urls.append(request.build_absolute_uri(image_str))
+                else:
+                    image_urls.append(image_str)
+            
+            if image_urls:
+                return image_urls
+        
         # Return placeholder images if no images
         return ['/P1a.png', '/P1b.png', '/P1c.png', '/P1d-3.png', '/P1e-4.png']
     

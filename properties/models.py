@@ -81,13 +81,25 @@ class Property(models.Model):
     
     @property
     def image(self):
-        """Get primary image URL"""
+        """Get primary image URL - handles both Cloudinary and local images"""
         first_image = self.images.filter(is_primary=True).first()
         if first_image:
+            # For Cloudinary URLs, just return as string
+            image_str = str(first_image.image)
+            if image_str.startswith('http'):
+                return image_str
+            # For local files, get the URL
             return first_image.image.url
+        
         any_image = self.images.first()
         if any_image:
+            # For Cloudinary URLs, just return as string
+            image_str = str(any_image.image)
+            if image_str.startswith('http'):
+                return image_str
+            # For local files, get the URL
             return any_image.image.url
+        
         return None  # Return None so frontend can use its own fallback images
     
     @property
@@ -99,7 +111,7 @@ class Property(models.Model):
 class PropertyImage(models.Model):
     """Images for properties"""
     property = models.ForeignKey(Property, related_name='images', on_delete=models.CASCADE)
-    image = models.ImageField(upload_to='properties/')
+    image = models.ImageField(upload_to='properties/', max_length=500)  # Extended for Cloudinary URLs
     title = models.CharField(max_length=100, blank=True)
     is_primary = models.BooleanField(default=False)
     order = models.IntegerField(default=0)
