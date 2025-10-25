@@ -27,6 +27,11 @@ from .contact_views import (
     CallScheduleAPIView,
     PropertyInquiryAPIView
 )
+from .settings_views import (
+    CompanySettingsRetrieveAPIView,
+    CompanySettingsUpdateAPIView,
+    CompanySettingsAdminAPIView
+)
 
 urlpatterns = [
     path('lead-sources/', LeadSourcesAPIView.as_view(), name='lead-sources'),
@@ -52,4 +57,8 @@ urlpatterns = [
     path('contact/', ContactInquiryAPIView.as_view(), name='contact-inquiry'),
     path('schedule-call/', CallScheduleAPIView.as_view(), name='schedule-call'),
     path('property-inquiry/', PropertyInquiryAPIView.as_view(), name='property-inquiry'),
+    # Settings endpoints
+    path('settings/', CompanySettingsRetrieveAPIView.as_view(), name='company-settings'),
+    path('settings/update/', CompanySettingsUpdateAPIView.as_view(), name='company-settings-update'),
+    path('admin/settings/', CompanySettingsAdminAPIView.as_view(), name='company-settings-admin'),
 ]

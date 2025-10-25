@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.conf import settings
 from accounts.models import Employee
 from properties.models import Property
+from .settings_model import CompanySettings
 
 
 class LeadSource(models.Model):

@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Lead, LeadSource, LeadNote, Deal, ScheduledVisit, Notification
+from .settings_model import CompanySettings
 
 @admin.register(LeadSource)
 class LeadSourceAdmin(admin.ModelAdmin):
@@ -121,3 +122,42 @@ class NotificationAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+@admin.register(CompanySettings)
+class CompanySettingsAdmin(admin.ModelAdmin):
+    """Admin for CompanySettings model"""
+    list_display = ('company_name', 'phone', 'email', 'updated_at')
+    readonly_fields = ('created_at', 'updated_at')
+    fieldsets = (
+        ('Company Info', {
+            'fields': ('company_name', 'country', 'city', 'address')
+        }),
+        ('Contact', {
+            'fields': ('phone', 'email', 'additional_phones', 'additional_emails')
+        }),
+        ('Media (Cloudinary)', {
+            'fields': ('logo_url', 'logo_public_id'),
+            'description': 'Logo is stored in Cloudinary. Update logo_url with the Cloudinary URL.'
+        }),
+        ('Content', {
+            'fields': ('about', 'policies')
+        }),
+        ('Social Media', {
+            'fields': ('facebook_url', 'twitter_url', 'instagram_url', 'linkedin_url')
+        }),
+        ('Business Hours', {
+            'fields': ('business_hours',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def has_add_permission(self, request):
+        """Only allow one instance to exist"""
+        return not CompanySettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        """Prevent deletion of settings"""
+        return False
