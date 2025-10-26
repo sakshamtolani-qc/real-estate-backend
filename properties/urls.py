@@ -19,3 +19,8 @@ urlpatterns = [
     path('types/', PropertyTypesAPIView.as_view(), name='property-types'),
     path('dashboard-stats/', DashboardStatsAPIView.as_view(), name='dashboard-stats'),
 ]
+
+# Admin dashboard routes under /api/admin/dashboard/
+admin_dashboard_patterns = [
+    path('stats/', DashboardStatsAPIView.as_view(), name='admin-dashboard-stats'),
+]

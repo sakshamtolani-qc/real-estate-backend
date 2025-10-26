@@ -24,6 +24,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from accounts.email_jwt_login import EmailTokenObtainPairView
+from properties.urls import admin_dashboard_patterns
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -33,6 +34,7 @@ urlpatterns = [
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/email-login/', EmailTokenObtainPairView.as_view(), name='email_token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/admin/dashboard/', include(admin_dashboard_patterns)),
 ]
 
 # Serve media files during development

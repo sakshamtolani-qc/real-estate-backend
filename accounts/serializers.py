@@ -3,9 +3,18 @@ from .models import User, Employee
 from django.contrib.auth.password_validation import validate_password
 
 class UserSerializer(serializers.ModelSerializer):
+    profile_photo_url = serializers.SerializerMethodField(read_only=True)
+    
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'phone', 'is_employee', 'is_client']
+        fields = ['id', 'username', 'email', 'phone', 'first_name', 'last_name', 'is_employee', 'is_client', 'is_superuser', 'profile_photo_url', 'profile_photo', 'city', 'country', 'address', 'about']
+        read_only_fields = ['id', 'username', 'is_employee', 'is_client', 'is_superuser']
+    
+    def get_profile_photo_url(self, obj):
+        """Get the absolute URL for profile photo from Cloudinary"""
+        if obj.profile_photo:
+            return obj.profile_photo.url
+        return None
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
@@ -101,6 +110,13 @@ class AddStaffSerializer(serializers.Serializer):
         )
         
         return employee
+
+class EmployeeDetailSerializer(serializers.ModelSerializer):
+    user = UserSerializer()
+    
+    class Meta:
+        model = Employee
+        fields = ['id', 'user', 'date_joined', 'status']
 
 class EmployeeSerializer(serializers.ModelSerializer):
     user = UserSerializer()

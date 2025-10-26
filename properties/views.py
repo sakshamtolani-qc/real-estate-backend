@@ -64,7 +64,8 @@ class DashboardStatsAPIView(APIView):
 		if has_lead_table:
 			try:
 				new_leads_count = Lead.objects.filter(
-					created_at__gte=start_of_month
+					created_at__gte=start_of_month,
+					status='new'
 				).count()
 				
 				# Offers Made (leads in proposal or negotiation stage)
@@ -109,13 +110,18 @@ class DashboardStatsAPIView(APIView):
 		# --- Top Closers by number of assigned leads ---
 		if has_lead_table:
 			try:
-				top_closers_qs = Employee.objects.annotate(
+				top_closers_qs = Employee.objects.select_related('user').annotate(
 					lead_count=Count('leads')
-				).order_by('-lead_count')[:5]
+				).order_by('-lead_count')[:3]
 				top_closers = [
 					{
+						"id": emp.id,
+						"user_id": emp.user.id,
 						"name": emp.user.get_full_name() or emp.user.username,
-						"lead_count": emp.lead_count
+						"email": emp.user.email,
+						"phone": emp.user.phone,
+						"profile_photo_url": getattr(emp.user, 'profile_photo_url', None),
+						"deals": emp.lead_count
 					} for emp in top_closers_qs if emp.lead_count > 0
 				]
 			except Exception as e:
