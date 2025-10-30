@@ -6,7 +6,9 @@ from .views import (
     LeadDetailAPIView,
     LeadUpdateAPIView,
     LeadDeleteAPIView,
-    AgentsListAPIView
+    AgentsListAPIView,
+    CloseLeadDealAPIView,
+    ClosedDealsListAPIView
 )
 from .agent_stats_view import AgentDashboardStatsAPIView
 from .scheduled_visit_views import (
@@ -40,7 +42,9 @@ urlpatterns = [
     path('<int:lead_id>/', LeadDetailAPIView.as_view(), name='lead-detail'),
     path('<int:lead_id>/update/', LeadUpdateAPIView.as_view(), name='lead-update'),
     path('<int:lead_id>/delete/', LeadDeleteAPIView.as_view(), name='lead-delete'),
+    path('<int:lead_id>/close-deal/', CloseLeadDealAPIView.as_view(), name='close-lead-deal'),
     path('agents/', AgentsListAPIView.as_view(), name='agents-list'),
+    path('deals/closed/', ClosedDealsListAPIView.as_view(), name='closed-deals-list'),
     path('agent/dashboard-stats/', AgentDashboardStatsAPIView.as_view(), name='agent-dashboard-stats'),
     # Scheduled Visits
     path('visits/', ScheduledVisitListAPIView.as_view(), name='visits-list'),

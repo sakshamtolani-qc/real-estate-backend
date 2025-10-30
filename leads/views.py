@@ -3,8 +3,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from .models import Lead, LeadSource, LeadNote
+from .models import Lead, LeadSource, LeadNote, Deal
 from accounts.models import Employee
+from properties.models import Property
 
 class LeadSourcesAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -359,6 +360,151 @@ class AgentsListAPIView(APIView):
             return Response({
                 'results': agents_data,
                 'count': len(agents_data)
+            })
+        except Exception as e:
+            return Response({
+                'message': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CloseLeadDealAPIView(APIView):
+    """API endpoint to close a lead deal and mark the lead as closed"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, lead_id):
+        try:
+            user = request.user
+            data = request.data
+            
+            # Get the lead
+            lead = get_object_or_404(Lead, id=lead_id)
+            
+            # Check permissions - admins can close any lead, agents can only close their assigned leads
+            if not (user.is_superuser or user.is_staff):
+                try:
+                    employee = Employee.objects.get(user=user)
+                    # Check if lead is assigned to this employee
+                    if lead.assigned_to != employee and lead.created_by != user:
+                        return Response({
+                            'message': 'You do not have permission to close this lead'
+                        }, status=status.HTTP_403_FORBIDDEN)
+                except Employee.DoesNotExist:
+                    return Response({
+                        'message': 'You do not have permission to close this lead'
+                    }, status=status.HTTP_403_FORBIDDEN)
+            
+            # Validate required fields
+            required_fields = ['property_id', 'offer_amount', 'closing_amount', 'closing_date']
+            for field in required_fields:
+                if not data.get(field):
+                    return Response({
+                        'success': False,
+                        'message': f'{field.replace("_", " ").title()} is required'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get the property
+            try:
+                property_obj = Property.objects.get(id=data.get('property_id'))
+            except Property.DoesNotExist:
+                return Response({
+                    'success': False,
+                    'message': 'Selected property not found'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Get the employee closing the deal
+            try:
+                employee = Employee.objects.get(user=user)
+            except Employee.DoesNotExist:
+                # If user is not an employee but is admin, we can still close the deal
+                if not (user.is_superuser or user.is_staff):
+                    return Response({
+                        'success': False,
+                        'message': 'Only agents/employees can close deals'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                employee = None
+            
+            # Create the deal
+            deal = Deal.objects.create(
+                lead=lead,
+                property=property_obj,
+                closed_by=employee,
+                deal_type=data.get('deal_type', 'sale'),
+                status='completed',
+                offer_amount=data.get('offer_amount'),
+                amount=data.get('closing_amount'),  # The closing/final amount
+                offer_date=data.get('offer_date') or data.get('closing_date'),  # Use closing date as fallback
+                closing_date=data.get('closing_date'),
+            )
+            
+            # Update lead status to 'closed' when deal is created
+            lead.status = 'closed'
+            lead.save()
+            
+            return Response({
+                'success': True,
+                'message': 'Deal closed successfully!',
+                'deal_id': deal.id,
+                'deal': {
+                    'id': deal.id,
+                    'lead_id': lead.id,
+                    'property_id': property_obj.id,
+                    'offer_amount': str(deal.offer_amount),
+                    'closing_amount': str(deal.amount),
+                    'closing_date': deal.closing_date,
+                }
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f'Error closing deal: {str(e)}'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ClosedDealsListAPIView(APIView):
+    """API endpoint to fetch all closed deals"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        try:
+            user = request.user
+            
+            # Check if user is admin/superuser - they can see all deals
+            if user.is_superuser or user.is_staff:
+                deals = Deal.objects.select_related('lead', 'property', 'closed_by__user').all()
+            else:
+                # For agents/employees - filter to show only deals they closed
+                try:
+                    employee = Employee.objects.get(user=user)
+                    deals = Deal.objects.select_related('lead', 'property', 'closed_by__user').filter(
+                        closed_by=employee
+                    )
+                except Employee.DoesNotExist:
+                    deals = Deal.objects.none()
+            
+            deals_data = []
+            for deal in deals:
+                deal_dict = {
+                    'id': deal.id,
+                    'lead_id': deal.lead.id,
+                    'lead_name': deal.lead.full_name,
+                    'property_id': deal.property.id,
+                    'property_title': deal.property.title,
+                    'property_image': deal.property.image,
+                    'offer_amount': str(deal.offer_amount) if deal.offer_amount else None,
+                    'closing_amount': str(deal.amount),
+                    'offer_date': deal.offer_date.isoformat() if deal.offer_date else None,
+                    'closing_date': deal.closing_date.isoformat() if deal.closing_date else None,
+                    'deal_type': deal.deal_type,
+                    'status': deal.status,
+                    'closed_by': deal.closed_by.user.get_full_name() if deal.closed_by else 'Unknown',
+                    'created_at': deal.created_at,
+                }
+                deals_data.append(deal_dict)
+            
+            return Response({
+                'results': deals_data,
+                'count': len(deals_data)
             })
         except Exception as e:
             return Response({
