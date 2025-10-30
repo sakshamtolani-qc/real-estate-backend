@@ -43,6 +43,7 @@ class Lead(models.Model):
         ('proposal', 'Proposal'),
         ('negotiation', 'Negotiation'),
         ('won', 'Won'),
+        ('closed', 'Closed'),
         ('lost', 'Lost'),
     ]
     
@@ -108,7 +109,8 @@ class Deal(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     
     # Financial
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    offer_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)  # This is the closing amount
     commission = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     
     # Dates
