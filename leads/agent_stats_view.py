@@ -17,37 +17,47 @@ class AgentDashboardStatsAPIView(APIView):
         now = datetime.now()
         start_of_month = datetime(now.year, now.month, 1)
         
+        print(f"\n=== Agent Dashboard Stats for {user.username} ===")
+        
         try:
             # Get the employee record for this agent
             employee = Employee.objects.get(user=user)
+            print(f"Employee found: {employee}")
             
             # Get leads assigned to this agent or created by them
             my_leads = Lead.objects.filter(
                 Q(assigned_to=employee) | Q(created_by=user)
             ).distinct()
+            print(f"Total my_leads: {my_leads.count()}")
             
-            # New leads this month
+            # New leads this month (with 'new' status created in current month)
             new_leads_count = my_leads.filter(
                 created_at__gte=start_of_month,
                 status='new'
             ).count()
+            print(f"New leads this month: {new_leads_count}")
             
-            # All my leads
+            # All my leads (total count)
             total_my_leads = my_leads.count()
+            print(f"Total my leads: {total_my_leads}")
             
-            # Leads in proposal or negotiation (offers made)
+            # Leads in proposal or negotiation (offers made - active negotiations)
             offers_count = my_leads.filter(
                 Q(status='proposal') | Q(status='negotiation')
             ).count()
+            print(f"Offers made (proposal/negotiation): {offers_count}")
             
-            # Check if Deal model exists and get deals closed by this agent
+            # Deals closed by this agent this month
+            deals_closed_count = 0
             try:
                 deals_closed_count = Deal.objects.filter(
                     closed_by=employee,
                     closing_date__gte=start_of_month,
                     status='completed'
                 ).count()
-            except:
+                print(f"Deals closed this month: {deals_closed_count}")
+            except Exception as e:
+                print(f"Error counting deals: {str(e)}")
                 deals_closed_count = 0
             
             # Recent leads (top 5 for dashboard table)
@@ -71,14 +81,28 @@ class AgentDashboardStatsAPIView(APIView):
                 'recent_leads': recent_leads_data,
             }
             
-            return Response(stats)
+            return Response(stats, status=200)
             
         except Employee.DoesNotExist:
-            # User is not an employee/agent
+            # User is not an employee/agent - return zero stats
+            print(f"User {user.id} is not an employee")
             return Response({
                 'new_leads': 0,
                 'total_leads': 0,
                 'offers_made': 0,
                 'deals_closed': 0,
                 'recent_leads': [],
-            })
+            }, status=200)
+        except Exception as e:
+            # Generic error handler
+            print(f"Error in AgentDashboardStatsAPIView: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return Response({
+                'new_leads': 0,
+                'total_leads': 0,
+                'offers_made': 0,
+                'deals_closed': 0,
+                'recent_leads': [],
+                'error': str(e)
+            }, status=200)

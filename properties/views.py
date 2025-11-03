@@ -306,6 +306,44 @@ class PropertyCreateAPIView(APIView):
 				'message': f'Error creating property: {str(e)}'
 			}, status=drf_status.HTTP_400_BAD_REQUEST)
 
+class PropertyDeleteAPIView(APIView):
+	"""Allow authenticated agents/admins to delete properties"""
+	permission_classes = [IsAuthenticated]
+	
+	def delete(self, request, pk):
+		try:
+			property_obj = Property.objects.get(id=pk)
+			
+			# Check if user is admin or agent (employee)
+			if not (request.user.is_superuser or request.user.is_employee):
+				return Response({
+					'success': False,
+					'message': 'You do not have permission to delete properties'
+				}, status=drf_status.HTTP_403_FORBIDDEN)
+			
+			# Delete property (cascade will delete related images and features)
+			property_title = property_obj.title
+			property_obj.delete()
+			
+			return Response({
+				'success': True,
+				'message': f'Property "{property_title}" deleted successfully!'
+			}, status=drf_status.HTTP_200_OK)
+			
+		except Property.DoesNotExist:
+			return Response({
+				'success': False,
+				'message': 'Property not found'
+			}, status=drf_status.HTTP_404_NOT_FOUND)
+		except Exception as e:
+			import traceback
+			print(f"Error deleting property: {str(e)}")
+			print(traceback.format_exc())
+			return Response({
+				'success': False,
+				'message': f'Error deleting property: {str(e)}'
+			}, status=drf_status.HTTP_400_BAD_REQUEST)
+
 class PropertyTypesAPIView(APIView):
 	"""Get list of all property types"""
 	permission_classes = [IsAuthenticated]

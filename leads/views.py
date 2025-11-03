@@ -27,18 +27,24 @@ class LeadsListAPIView(APIView):
     
     def get(self, request):
         user = request.user
+        from django.db.models import Q
         
-        # Check if user is admin/superuser - they can see all leads
+        # Exclude closed and won leads from the list for agents only - they should see in closed deals page
+        excluded_statuses = ['closed', 'won']
+        
+        # Check if user is admin/superuser - they can see ALL leads including closed/won
         if user.is_superuser or user.is_staff:
+            # Admins see all leads
             leads = Lead.objects.select_related('assigned_to__user', 'source').all()
         else:
-            # For agents/employees - filter to show only leads assigned to them or created by them
+            # For agents/employees - filter to show only active leads assigned to them or created by them
             try:
                 employee = Employee.objects.get(user=user)
-                # Get leads assigned to this employee OR created by this user
-                from django.db.models import Q
+                # Get active leads assigned to this employee OR created by this user (exclude won/closed)
                 leads = Lead.objects.select_related('assigned_to__user', 'source').filter(
                     Q(assigned_to=employee) | Q(created_by=user)
+                ).exclude(
+                    status__in=excluded_statuses
                 ).distinct()
             except Employee.DoesNotExist:
                 # User is not an employee, return empty list
@@ -436,8 +442,8 @@ class CloseLeadDealAPIView(APIView):
                 closing_date=data.get('closing_date'),
             )
             
-            # Update lead status to 'closed' when deal is created
-            lead.status = 'closed'
+            # Update lead status to 'won' when deal is created (won is for completed deals)
+            lead.status = 'won'
             lead.save()
             
             return Response({

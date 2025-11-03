@@ -114,8 +114,8 @@ class PropertyDetailSerializer(serializers.ModelSerializer):
             if image_urls:
                 return image_urls
         
-        # Return placeholder images if no images
-        return ['/P1a.png', '/P1b.png', '/P1c.png', '/P1d-3.png', '/P1e-4.png']
+        # Return empty array if no images - let frontend handle defaults
+        return []
     
     def get_subtitle(self, obj):
         return f"{obj.property_type.name} in {obj.city}"

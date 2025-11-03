@@ -12,12 +12,15 @@ class EmailTokenObtainPairSerializer(serializers.Serializer):
     def validate(self, attrs):
         email = attrs.get('email')
         password = attrs.get('password')
-        user = User.objects.filter(email=email).first()
-        if user is None:
-            raise serializers.ValidationError('No user with this email.')
-        user = authenticate(username=user.username, password=password)
-        if not user:
-            raise serializers.ValidationError('Invalid credentials.')
+        try:
+            user = User.objects.filter(email=email).first()
+            if user is None:
+                raise serializers.ValidationError('No user with this email.')
+            user = authenticate(username=user.username, password=password)
+            if not user:
+                raise serializers.ValidationError('Invalid credentials.')
+        except Exception as e:
+            raise serializers.ValidationError(f'Authentication failed: {str(e)}')
         from rest_framework_simplejwt.tokens import RefreshToken
         refresh = RefreshToken.for_user(user)
         
